@@ -42,7 +42,11 @@ export interface MusicState {
  * Non-Spotify URLs are left untouched.
  */
 const preferSmallerArtwork = (url: string): string =>
-  url.replace('/image/ab67616d0000b273', '/image/ab67616d00001e02')
+  // Match the bare id prefix rather than "/image/<id>": by the time we see the
+  // URL the server has usually wrapped it in /proxy/v1?url=..., where the
+  // slashes are percent-encoded but the id is not. Keying off the id alone
+  // works for both the raw and the wrapped form.
+  url.replace(/ab67616d0000b273/g, 'ab67616d00001e02')
 
 export const useMusicStore = create<MusicState>((set, get) => ({
   song: null,
@@ -62,8 +66,13 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           newData.thumbnail = `http://${context.ip}:${context.port}/proxy/v1?url=${encodeURIComponent(preferSmallerArtwork(newData.thumbnail))}`
         }
       } else if (newData.thumbnail.startsWith('/')) {
+        // The server normally hands us a relative /proxy/v1?url=... — this is
+        // the path Spotify artwork actually takes, so the size preference has
+        // to be applied here too or it never runs at all.
         const context = useSettingsStore.getState().manifest?.context
-        newData.thumbnail = `http://${context.ip}:${context.port}${newData.thumbnail}`
+        newData.thumbnail = preferSmallerArtwork(
+          `http://${context.ip}:${context.port}${newData.thumbnail}`
+        )
       }
     }
 
