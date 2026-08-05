@@ -11,7 +11,9 @@ import { useEffect, useState } from 'react'
  */
 
 const AGENT_URL = 'http://127.0.0.1:8892/pairing'
-const POLL_MS = 2000
+// Poll fast: a pairing exchange can resolve in a couple of seconds, and the
+// code must be on screen the whole time the person is comparing it.
+const POLL_MS = 500
 
 type PairingState = {
   active: boolean
