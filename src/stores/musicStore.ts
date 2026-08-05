@@ -34,6 +34,16 @@ export interface MusicState {
   setShuffle: () => void
 }
 
+/**
+ * Spotify encodes the artwork size in the CDN path prefix: 0000b273 is 640x640
+ * (~110KB) while 00001e02 is 300x300 (~36KB). The Car Thing panel is 800x480, so
+ * the 640px asset is mostly wasted bytes — and on a Bluetooth-tunneled connection
+ * (~155KB/s) it costs about 0.7s of a saturated link on every track change.
+ * Non-Spotify URLs are left untouched.
+ */
+const preferSmallerArtwork = (url: string): string =>
+  url.replace('/image/ab67616d0000b273', '/image/ab67616d00001e02')
+
 export const useMusicStore = create<MusicState>((set, get) => ({
   song: null,
   setSong: (newData) => {
@@ -49,7 +59,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         if (context.id == ClientPlatformIDs.CarThing || context.ip == 'localhost') {
           if (newData.thumbnail.includes(`${context.ip}:${context.port}`)) return // already parsed as a corrected IP
           
-          newData.thumbnail = `http://${context.ip}:${context.port}/proxy/v1?url=${encodeURIComponent(newData.thumbnail)}`
+          newData.thumbnail = `http://${context.ip}:${context.port}/proxy/v1?url=${encodeURIComponent(preferSmallerArtwork(newData.thumbnail))}`
         }
       } else if (newData.thumbnail.startsWith('/')) {
         const context = useSettingsStore.getState().manifest?.context
