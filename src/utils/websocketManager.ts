@@ -8,6 +8,10 @@ import {
 
 type SocketEventListener = (msg: DeskThingToDeviceCore & { app?: string }) => void
 type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting'
+
+/** Reconnect backoff: quick first attempt, then ease off to this ceiling. */
+const RECONNECT_BASE_MS = 500
+const RECONNECT_MAX_MS = 10000
 type StatusListener = (status: ConnectionStatus) => void
 
 /**
@@ -19,6 +23,7 @@ export class WebSocketManager {
   private listeners: SocketEventListener[] = []
   private statusListeners: StatusListener[] = []
   private reconnecting = false
+  private reconnectAttempts = 0
   private url: string
   private heartbeatInterval: NodeJS.Timeout | null = null
   private pongTimeout: NodeJS.Timeout | null = null
@@ -105,6 +110,7 @@ export class WebSocketManager {
         clearTimeout(timeout)
         console.info(`[${id}] Connected to ${this.url}`)
         this.reconnecting = false
+        this.reconnectAttempts = 0   // connected: start the backoff over
         this.startHeartbeat()
         this.notifyStatusChange('connected')
         resolve()
@@ -120,6 +126,7 @@ export class WebSocketManager {
     this.socket.onopen = () => {
       console.info(`[${id}] Connected to ${this.url}`)
       this.reconnecting = false
+      this.reconnectAttempts = 0   // connected: start the backoff over
       this.startHeartbeat()
       this.notifyStatusChange('connected')
     }
@@ -133,9 +140,12 @@ export class WebSocketManager {
         clearTimeout(this.closeTimeoutId)
       }
 
+      // Retry promptly. This used to wait 5s here and then a further 10s in
+      // reconnect(), so the first attempt was 15s after a drop no matter how
+      // briefly the link had gone away.
       this.closeTimeoutId = setTimeout(() => {
         this.reconnect()
-      }, 5000)
+      }, 250)
     }
 
     this.socket.onerror = (error) => {
@@ -175,7 +185,7 @@ export class WebSocketManager {
 
       this.closeTimeoutId = setTimeout(() => {
         this.reconnect()
-      }, 5000)
+      }, 250)
       return false
     }
   }
@@ -185,7 +195,6 @@ export class WebSocketManager {
   }
 
   reconnect() {
-    Logger.info('Reconnecting in 10s...')
     if (this.reconnecting) return
     this.reconnecting = true
     this.notifyStatusChange('reconnecting')
@@ -196,11 +205,21 @@ export class WebSocketManager {
       clearTimeout(this.reconnectId)
     }
 
+    // Back off instead of waiting a flat 10s. A dropped link usually comes
+    // back immediately, so the first retry should be quick; only a genuinely
+    // absent server should push the delay out.
+    const delay = Math.min(
+      RECONNECT_BASE_MS * 2 ** this.reconnectAttempts,
+      RECONNECT_MAX_MS
+    )
+    this.reconnectAttempts += 1
+    Logger.info(`Reconnecting in ${delay}ms...`)
+
     this.reconnectId = setTimeout(() => {
       Logger.info('Conecting...')
       this.connect()
       this.reconnecting = false
-    }, 10000) // Reconnect after 10 seconds
+    }, delay)
   }
 
   sendMessage(message: DeviceToDeskthingData) {
