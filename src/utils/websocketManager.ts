@@ -52,8 +52,16 @@ export class WebSocketManager {
       this.socket.onerror = null
       this.socket.onmessage = null
 
-      // Close connection if open
-      if (this.socket.readyState === WebSocket.OPEN) {
+      // Close the connection if it is open OR still connecting. A socket left
+      // in CONNECTING (e.g. the server was unreachable when we dialed — the
+      // case on a Bluetooth link that comes up ~80s after the device boots)
+      // must be closed too, or it lingers half-open, holds a tunnel stream,
+      // and blocks the client from ever cleanly reconnecting once the link is
+      // up. Only closing OPEN sockets leaked these on every failed attempt.
+      if (
+        this.socket.readyState === WebSocket.OPEN ||
+        this.socket.readyState === WebSocket.CONNECTING
+      ) {
         await this.socket.close(4000, 'Closing existing connection')
       }
 
