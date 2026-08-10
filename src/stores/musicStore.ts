@@ -11,6 +11,7 @@ import { useMappingStore } from './mappingStore'
 import { SocketData, SocketMusic } from '@src/types'
 import Logger from '@src/utils/Logger'
 import { useSettingsStore } from './settingsStore'
+import { isWheelTurning } from './volumeHold'
 
 /**
  * The `useMusicStore` is a Zustand store that manages the state of the music player.
@@ -48,6 +49,7 @@ const preferSmallerArtwork = (url: string): string =>
   // works for both the raw and the wrapped form.
   url.replace(/ab67616d0000b273/g, 'ab67616d00001e02')
 
+
 export const useMusicStore = create<MusicState>((set, get) => ({
   song: null,
   setSong: (newData) => {
@@ -81,10 +83,24 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       return
     }
 
-    const hasChanges = Object.keys(newData).some((key) => newData[key] !== currentSong[key])
+    // THE WHEEL FEEDBACK LOOP. VolUp/VolDown compute the next notch from
+    // song.volume, and this merge overwrites song.volume with the server's
+    // echo on every push (hasChanges is effectively always true because
+    // track_progress moves each poll). So a lagging or defaulted server volume
+    // (the app's `?? 50`, or a stale device reading) snaps the display back and
+    // re-seeds the next notch from the wrong base — you turn down, it jumps to
+    // 50/full, you turn down again. While the user is actively turning, the
+    // LOCAL value is the truth; drop the server's volume from this merge until
+    // the turn has been quiet for a moment.
+    const merged: SongData = { ...currentSong, ...newData } as SongData
+    if (isWheelTurning((get() as any)._volumeTouchedAt, Date.now())) {
+      merged.volume = currentSong.volume
+    }
+
+    const hasChanges = Object.keys(merged).some((key) => merged[key] !== currentSong[key])
 
     if (hasChanges) {
-      set({ song: { ...currentSong, ...newData } as SongData })
+      set({ song: merged })
     }
 
     const updateIcons = async () => {
@@ -210,7 +226,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   setVolume: (volume: number) => {
     const previousState = get().song
-    set({ song: { ...get().song, volume: volume } })
+    // Mark the wheel as actively turning, so incoming server echoes stop
+    // clobbering this optimistic value — see setSong.
+    set({ song: { ...get().song, volume: volume }, _volumeTouchedAt: Date.now() } as any)
     createWSAction({
       request: AUDIO_REQUESTS.VOLUME,
       payload: volume,

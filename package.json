@@ -8,7 +8,8 @@
     "build": "npx @deskthing/cli package-client",
     "build:legacy": "tsc && vite build --base=\"./\"",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0 --fix",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --loader ../deskthing-apps/spotify/node_modules/tsm/loader.mjs --test src/**/*.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
