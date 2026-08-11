@@ -9,7 +9,7 @@
     "build:legacy": "tsc && vite build --base=\"./\"",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0 --fix",
     "preview": "vite preview",
-    "test": "node --loader ../deskthing-apps/spotify/node_modules/tsm/loader.mjs --test src/**/*.test.ts"
+    "test": "node --loader tsm --test src/**/*.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -37,6 +37,7 @@
     "postcss": "^8.4.47",
     "prettier": "^3.3.3",
     "tailwindcss": "^3.4.14",
+    "tsm": "^2.3.0",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.11.0",
     "vite": "^5.4.10"

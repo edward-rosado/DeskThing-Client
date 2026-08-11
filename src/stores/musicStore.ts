@@ -11,7 +11,7 @@ import { useMappingStore } from './mappingStore'
 import { SocketData, SocketMusic } from '@src/types'
 import Logger from '@src/utils/Logger'
 import { useSettingsStore } from './settingsStore'
-import { isWheelTurning } from './volumeHold'
+import { resolveVolumeOnPush } from './volumeHold'
 
 /**
  * The `useMusicStore` is a Zustand store that manages the state of the music player.
@@ -20,6 +20,13 @@ import { isWheelTurning } from './volumeHold'
  */
 export interface MusicState {
   song?: SongData | null
+  /**
+   * When the volume wheel was last touched. DECLARED state, not smuggled: an
+   * earlier version wrote and read this through `as any` casts, which hid it
+   * from the type system entirely — a typo in either string would compile
+   * clean and silently disable the anti-bounce hold. See volumeHold.ts.
+   */
+  _volumeTouchedAt?: number
   setSong: (song: SongData) => void
   requestMusicData: (force?: boolean) => void
   next: () => void
@@ -93,9 +100,15 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     // LOCAL value is the truth; drop the server's volume from this merge until
     // the turn has been quiet for a moment.
     const merged: SongData = { ...currentSong, ...newData } as SongData
-    if (isWheelTurning((get() as any)._volumeTouchedAt, Date.now())) {
-      merged.volume = currentSong.volume
-    }
+    // The single decision that breaks the loop, via the TESTED helper — the
+    // rule must not be re-implemented inline or the tests pin a function the
+    // shipped code doesn't run.
+    merged.volume = resolveVolumeOnPush(
+      currentSong.volume,
+      merged.volume,
+      get()._volumeTouchedAt,
+      Date.now()
+    ) as SongData['volume']
 
     const hasChanges = Object.keys(merged).some((key) => merged[key] !== currentSong[key])
 
@@ -228,7 +241,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     const previousState = get().song
     // Mark the wheel as actively turning, so incoming server echoes stop
     // clobbering this optimistic value — see setSong.
-    set({ song: { ...get().song, volume: volume }, _volumeTouchedAt: Date.now() } as any)
+    set({ song: { ...get().song, volume: volume }, _volumeTouchedAt: Date.now() })
     createWSAction({
       request: AUDIO_REQUESTS.VOLUME,
       payload: volume,

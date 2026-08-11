@@ -15,7 +15,17 @@
  * so a change made elsewhere (a phone) still lands.
  */
 
-/** How long after a wheel touch the local volume stays authoritative. */
+/**
+ * How long after a wheel touch the local volume stays authoritative.
+ *
+ * DERIVED FROM THE SERVER, not tuned independently: the stale echoes this
+ * guards against live for the server's request-cache TTL plus its confirm
+ * window — deskthing-apps/spotify's `PUBLIC_API_CONFIG.cacheMs` (3s) + the
+ * VolumeWriter margin (500ms), see volumeWriter.ts `confirmAfterMs`. 4000ms =
+ * that horizon with a beat of slack. If the server's cache TTL or poll cadence
+ * changes, this must follow — there is no import across the repos to enforce
+ * it, only this note (and its twin on the server side).
+ */
 export const VOLUME_HOLD_MS = 4000
 
 /** One wheel notch. Matches the hardware VolUp/VolDown step. */
