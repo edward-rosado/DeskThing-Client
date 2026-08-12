@@ -11,6 +11,7 @@ import { useMappingStore } from './mappingStore'
 import { SocketData, SocketMusic } from '@src/types'
 import Logger from '@src/utils/Logger'
 import { useSettingsStore } from './settingsStore'
+import { resolveVolumeOnPush } from './volumeHold'
 
 /**
  * The `useMusicStore` is a Zustand store that manages the state of the music player.
@@ -19,6 +20,13 @@ import { useSettingsStore } from './settingsStore'
  */
 export interface MusicState {
   song?: SongData | null
+  /**
+   * When the volume wheel was last touched. DECLARED state, not smuggled: an
+   * earlier version wrote and read this through `as any` casts, which hid it
+   * from the type system entirely — a typo in either string would compile
+   * clean and silently disable the anti-bounce hold. See volumeHold.ts.
+   */
+  _volumeTouchedAt?: number
   setSong: (song: SongData) => void
   requestMusicData: (force?: boolean) => void
   next: () => void
@@ -33,6 +41,21 @@ export interface MusicState {
   setRepeat: (state: 'context' | 'track' | 'off') => void
   setShuffle: () => void
 }
+
+/**
+ * Spotify encodes the artwork size in the CDN path prefix: 0000b273 is 640x640
+ * (~110KB) while 00001e02 is 300x300 (~36KB). The Car Thing panel is 800x480, so
+ * the 640px asset is mostly wasted bytes — and on a Bluetooth-tunneled connection
+ * (~155KB/s) it costs about 0.7s of a saturated link on every track change.
+ * Non-Spotify URLs are left untouched.
+ */
+const preferSmallerArtwork = (url: string): string =>
+  // Match the bare id prefix rather than "/image/<id>": by the time we see the
+  // URL the server has usually wrapped it in /proxy/v1?url=..., where the
+  // slashes are percent-encoded but the id is not. Keying off the id alone
+  // works for both the raw and the wrapped form.
+  url.replace(/ab67616d0000b273/g, 'ab67616d00001e02')
+
 
 export const useMusicStore = create<MusicState>((set, get) => ({
   song: null,
@@ -49,11 +72,16 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         if (context.id == ClientPlatformIDs.CarThing || context.ip == 'localhost') {
           if (newData.thumbnail.includes(`${context.ip}:${context.port}`)) return // already parsed as a corrected IP
           
-          newData.thumbnail = `http://${context.ip}:${context.port}/proxy/v1?url=${encodeURIComponent(newData.thumbnail)}`
+          newData.thumbnail = `http://${context.ip}:${context.port}/proxy/v1?url=${encodeURIComponent(preferSmallerArtwork(newData.thumbnail))}`
         }
       } else if (newData.thumbnail.startsWith('/')) {
+        // The server normally hands us a relative /proxy/v1?url=... — this is
+        // the path Spotify artwork actually takes, so the size preference has
+        // to be applied here too or it never runs at all.
         const context = useSettingsStore.getState().manifest?.context
-        newData.thumbnail = `http://${context.ip}:${context.port}${newData.thumbnail}`
+        newData.thumbnail = preferSmallerArtwork(
+          `http://${context.ip}:${context.port}${newData.thumbnail}`
+        )
       }
     }
 
@@ -62,10 +90,30 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       return
     }
 
-    const hasChanges = Object.keys(newData).some((key) => newData[key] !== currentSong[key])
+    // THE WHEEL FEEDBACK LOOP. VolUp/VolDown compute the next notch from
+    // song.volume, and this merge overwrites song.volume with the server's
+    // echo on every push (hasChanges is effectively always true because
+    // track_progress moves each poll). So a lagging or defaulted server volume
+    // (the app's `?? 50`, or a stale device reading) snaps the display back and
+    // re-seeds the next notch from the wrong base — you turn down, it jumps to
+    // 50/full, you turn down again. While the user is actively turning, the
+    // LOCAL value is the truth; drop the server's volume from this merge until
+    // the turn has been quiet for a moment.
+    const merged: SongData = { ...currentSong, ...newData } as SongData
+    // The single decision that breaks the loop, via the TESTED helper — the
+    // rule must not be re-implemented inline or the tests pin a function the
+    // shipped code doesn't run.
+    merged.volume = resolveVolumeOnPush(
+      currentSong.volume,
+      merged.volume,
+      get()._volumeTouchedAt,
+      Date.now()
+    ) as SongData['volume']
+
+    const hasChanges = Object.keys(merged).some((key) => merged[key] !== currentSong[key])
 
     if (hasChanges) {
-      set({ song: { ...currentSong, ...newData } as SongData })
+      set({ song: merged })
     }
 
     const updateIcons = async () => {
@@ -191,7 +239,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   setVolume: (volume: number) => {
     const previousState = get().song
-    set({ song: { ...get().song, volume: volume } })
+    // Mark the wheel as actively turning, so incoming server echoes stop
+    // clobbering this optimistic value — see setSong.
+    set({ song: { ...get().song, volume: volume }, _volumeTouchedAt: Date.now() })
     createWSAction({
       request: AUDIO_REQUESTS.VOLUME,
       payload: volume,

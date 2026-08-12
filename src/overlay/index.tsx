@@ -1,13 +1,15 @@
 import { useSettingsStore, useWebSocketStore } from '@src/stores'
 import AppTray from './AppTray'
+import { useFocusedAppOwnsTransport } from './useFocusedAppOwnsTransport'
 import Miniplayer from './Miniplayer/Miniplayer'
 import NotificationOverlay from './Notification'
 import SelectionWheel from './SelectionWheel'
 import VolumeOverlay from './Volume'
 import { useActionStore } from '@src/stores/actionStore'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import YouAreHere from './YouAreHere'
 import { ServerStatus } from './ConnectionStatus'
+import { PairingOverlay } from './PairingOverlay'
 import ScreenSaverWrapper from './ScreenSaver/ScreenSaverWrapper'
 
 interface OverlayProps {
@@ -40,6 +42,15 @@ const Overlays: React.FC<OverlayProps> = ({ children }) => {
         : 'pb-48'
   }, [preferences.theme.scale])
 
+  // Whether the focused app draws its own transport — the rule (and the
+  // fail-closed reasoning, and the app-list-not-currentView lookup) lives in
+  // ONE place so Miniplayer-adjacent code cannot re-derive it from the stale
+  // currentView.manifest read this replaced.
+  const appOwnsTransport = useFocusedAppOwnsTransport()
+
+  const showMiniplayer =
+    preferences.miniplayer.visible && preferences.onboarding && !appOwnsTransport
+
   const margin = useMemo(() => {
     return preferences.miniplayer.state !== 'hidden'
   }, [preferences.miniplayer.state])
@@ -49,17 +60,18 @@ const Overlays: React.FC<OverlayProps> = ({ children }) => {
     <div className="flex bg-black flex-col w-screen max-h-screen h-screen items-center justify-end">
       {!preferences.onboarding || <AppTray />}
       <ServerStatus />
+      <PairingOverlay />
       <NotificationOverlay />
       <VolumeOverlay />
       {!isConnected && <ScreenSaverWrapper />}
       {showHelp && <YouAreHere setShow={setShowHelp} />}
       {wheelState && <SelectionWheel />}
       <div
-        className={`h-full w-full transition-[padding] ${preferences.onboarding && preferences.miniplayer.visible && margin && height}`}
+        className={`h-full w-full transition-[padding] ${showMiniplayer && margin && height}`}
       >
         {memoChildren}
       </div>
-      {preferences.miniplayer.visible && preferences.onboarding && <Miniplayer />}
+      {showMiniplayer && <Miniplayer />}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import {
   useWebSocketStore
 } from '../stores'
 import { useActionStore } from '@src/stores/actionStore'
+import { nextWheelVolume } from '@src/stores/volumeHold'
 import {
   Action,
   AUDIO_REQUESTS,
@@ -217,15 +218,17 @@ export class ActionHandler {
 
   VolUp = () => {
     const volume = useMusicStore.getState().song.volume
-    if (volume <= 95) {
-      useMusicStore.getState().setVolume(volume + 5)
+    const next = nextWheelVolume(volume, 1)
+    if (next !== null) {
+      useMusicStore.getState().setVolume(next)
     }
   }
 
   VolDown = () => {
     const volume = useMusicStore.getState().song.volume
-    if (volume >= 5) {
-      useMusicStore.getState().setVolume(volume - 5)
+    const next = nextWheelVolume(volume, -1)
+    if (next !== null) {
+      useMusicStore.getState().setVolume(next)
     }
   }
 

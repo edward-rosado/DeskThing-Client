@@ -14,7 +14,18 @@ import { handleServerSocket } from '@src/utils/serverWebsocketHandler'
 export const WebSocketListener = () => {
   const setSong = useMusicStore((store) => store.setSong)
   const getSong = useMusicStore((store) => store.requestMusicData)
+  const isConnected = useWebSocketStore((store) => store.isConnected)
   const [prevTrackName, setPrevTrackName] = useState('')
+
+  // Ask for the current track as soon as we are connected. Without this the
+  // only path to song data is an unsolicited push, so after any reconnect the
+  // screen stays blank until the track happens to change or the server's
+  // refresh interval comes round — seconds of "Waiting For Track…" while the
+  // connection is actually fine. Most visible over Bluetooth, where the link
+  // legitimately drops and returns.
+  useEffect(() => {
+    if (isConnected) getSong(true)
+  }, [isConnected, getSong])
 
   useEffect(() => {
     const websocketManager = useWebSocketStore.getState()

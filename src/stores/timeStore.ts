@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { useSettingsStore } from './settingsStore'
-import Logger from '@src/utils/Logger'
 
 /**
  * Manages the time-related state and functionality for the application.

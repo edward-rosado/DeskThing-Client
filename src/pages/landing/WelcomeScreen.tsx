@@ -5,7 +5,7 @@ import SyncButton from '@src/components/ui/SyncButton'
 import FullscreenButton from '@src/components/ui/FullscreenButton'
 import SkipSetupButton from './SkipSetupButton'
 import { useSettingsStore } from '@src/stores'
-import { ClientConnectionMethod, ClientPlatformIDs } from '@deskthing/types'
+import { ClientPlatformIDs } from '@deskthing/types'
 
 /**
  * The `WelcomePage` component is the initial screen displayed to users when they first start the application. It shows the application logo, a loading indicator, and buttons to either proceed with the setup process or skip it.
