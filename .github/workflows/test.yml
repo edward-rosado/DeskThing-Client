@@ -1,0 +1,35 @@
+name: test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  client:
+    runs-on: ubuntu-latest   # case-sensitive: this is what catches TS1261
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.2'
+          cache: npm
+      - run: npm ci
+
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: unit tests
+        run: npm test
+
+      - name: build
+        run: npx vite build --base="./"
+
+      - name: no case-only filename collisions
+        # The bug this guards against shipped: App.tsx imported
+        # './components/ButtonListener' while the file was buttonListener.tsx.
+        # macOS resolved it; a case-sensitive runner does not.
+        run: |
+          dupes=$(git ls-files | tr 'A-Z' 'a-z' | sort | uniq -d)
+          if [ -n "$dupes" ]; then echo "case-only duplicates:"; echo "$dupes"; exit 1; fi
