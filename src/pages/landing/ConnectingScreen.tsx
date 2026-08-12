@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react'
-import { IconArrowRight, IconDisconnect, IconLogoGearLoading } from '../../assets/Icons'
+import React, { useEffect } from 'react'
+import { IconDisconnect, IconLogoGearLoading } from '../../assets/Icons'
 import { useSettingsStore, useWebSocketStore } from '@src/stores'
 import { StepProps } from '.'
 import Button from '@src/components/ui/Button'
 import Logger from '@src/utils/Logger'
-import SkipSetupButton from './SkipSetupButton'
 
 /**
  * The `ConnectingPage` component is responsible for rendering the connecting screen of the application. It displays the connection status, allows the user to disconnect or reconnect to the DeskThing Server, and triggers the next steps in the application flow.

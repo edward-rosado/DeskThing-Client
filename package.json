@@ -9,7 +9,8 @@
     "build:legacy": "tsc && vite build --base=\"./\"",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0 --fix",
     "preview": "vite preview",
-    "test": "node --loader tsm --test src/**/*.test.ts"
+    "test": "node --loader tsm --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "clsx": "^2.1.1",
